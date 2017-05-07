@@ -24,6 +24,8 @@ var marvel = apiMarvel.createClient({
     privateKey: config.get("marvelPrivateKey")
 });
 
+var getStarted = null;
+
 app.get('/', function (req, res) {
     res.send('Hello World!');
 });
@@ -41,7 +43,14 @@ app.post('/webhook/', function (req, res) {
     if (data.object == 'page') {
         data.entry.forEach(function(pageEntry) {
             pageEntry.messaging.forEach(function(event) {
+                if (event.postback) {
+                    if (event.postback.payload == 'GET_STARTED_PAYLOAD') {
+                        sendTextMessage(event.sender.id, 'Digite um nome de personagem Marvel :D');
+                    }
+                }
+
                 if (event.message) {
+                    console.log(event.message);
                     sendGenericMessage(event);
                 }
             });
@@ -51,6 +60,12 @@ app.post('/webhook/', function (req, res) {
     res.sendStatus(200);
 });
 
+/**
+ * Send simple message text
+ *
+ * @param recipientId
+ * @param messageText
+ */
 function sendTextMessage(recipientId, messageText) {
     var messageData = {
         recipient: {
@@ -62,11 +77,13 @@ function sendTextMessage(recipientId, messageText) {
         }
     };
 
-    callSendAPI(messageData);
+    callSendAPI(messageData, 'messages');
 }
 
 /**
  * Send a Structured Message (Generic Message type) using the Send API.
+ *
+ * @param event
  */
 function sendGenericMessage(event) {
     var recipientId = event.sender.id;
@@ -125,16 +142,35 @@ function sendGenericMessage(event) {
                 }
             };
 
-            callSendAPI(messageData);
+            callSendAPI(messageData, 'messages');
         })
         .fail(console.error)
         .done(function(data) {
         });
 }
 
-function callSendAPI(messageData) {
+/**
+ * Get first name user recipient
+ *
+ * @param userId
+ */
+function getFirstName(userId) {
+    request.get({
+        url: 'https://graph.facebook.com/v2.6/' + userId + '?fields=first_name&' + MESSENGER_VALIDATE_TOKEN
+    }, function (err, res) {
+        console.log(res.body);
+    });
+}
+
+/**
+ * Call send request API Facebook Messenger
+ *
+ * @param messageData
+ * @param resourceType
+ */
+function callSendAPI(messageData, resourceType) {
     request({
-        uri: 'https://graph.facebook.com/v2.6/me/messages',
+        uri: 'https://graph.facebook.com/v2.6/me/' + resourceType,
         qs: { access_token: MESSENGER_VALIDATE_TOKEN },
         method: 'POST',
         json: messageData
@@ -143,6 +179,11 @@ function callSendAPI(messageData) {
         if (!error && res.statusCode == 200) {
             var recipientId = body.recipient_id;
             var messageId = body.message_id;
+
+            if (body.result) {
+                getStarted = body.result;
+                console.log(getStarted);
+            }
 
             if (messageId) {
                 console.log("Successfully sent message with id %s to recipient %s",
