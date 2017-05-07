@@ -71,21 +71,36 @@ function sendTextMessage(recipientId, messageText) {
 function sendGenericMessage(event) {
     var recipientId = event.sender.id;
 
-    var thumbnail = "",
-        name = "",
-        description = "";
+    var id = null,
+        thumbnail = '',
+        name = '',
+        description = '',
+        urlDetail = '';
+
+    var urls = [];
 
     marvel.characters.findByName(event.message.text)
         .then(function(res) {
             if (typeof res.data[0] !== "undefined") {
+                id = res.data[0].id;
                 name = res.data[0].name;
                 thumbnail = res.data[0].thumbnail;
                 description = res.data[0].description;
+                urls = res.data[0].urls;
             } else {
                 sendTextMessage(recipientId, 'Não conseguimos encontrar o seu personagem :(');
             }
         })
         .then(function(res) {
+
+            urlDetail = urls.map(function(item) {
+                if (item.type == 'detail') {
+                    return item.url;
+                }
+            });
+
+            urlDetail = urlDetail[0].split('?');
+
             var messageData = {
                 recipient: {
                     id: recipientId
@@ -101,12 +116,8 @@ function sendGenericMessage(event) {
                                 image_url: thumbnail.path + "/portrait_medium." + thumbnail.extension,
                                 buttons: [{
                                     type: "web_url",
-                                    url: "https://www.oculus.com/en-us/rift/",
-                                    title: "Open Web URL"
-                                }, {
-                                    type: "postback",
-                                    title: "Call Postback",
-                                    payload: "Payload for first bubble"
+                                    url: urlDetail[0],
+                                    title: "Ver mais"
                                 }]
                             }]
                         }
