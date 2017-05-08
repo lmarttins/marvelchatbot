@@ -5,12 +5,19 @@ const bodyParser = require('body-parser');
 const request = require('request');
 const config = require('config');
 const apiMarvel = require('marvel-api');
+const bluebird = require('bluebird');
+const redis = require('redis');
+
+bluebird.promisifyAll(redis.RedisClient.prototype);
+bluebird.promisifyAll(redis.Multi.prototype);
 
 var app = express();
 app.set('port', (process.env.PORT || 4000));
 app.use(bodyParser.urlencoded({extended: false}));
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+var cache = redis.createClient({port: 6379, host: 'redis', family: 4});
 
 /**
  * Get config or env token
@@ -50,7 +57,6 @@ app.post('/webhook/', function (req, res) {
                 }
 
                 if (event.message) {
-                    console.log(event.message);
                     sendGenericMessage(event);
                 }
             });
@@ -87,65 +93,97 @@ function sendTextMessage(recipientId, messageText) {
  */
 function sendGenericMessage(event) {
     var recipientId = event.sender.id;
+    var data = {};
+    var messageData = {};
 
-    var id = null,
-        thumbnail = '',
-        name = '',
-        description = '',
-        urlDetail = '';
-
-    var urls = [];
-
-    marvel.characters.findByName(event.message.text)
+    cache.getAsync(event.message.text)
         .then(function(res) {
-            if (typeof res.data[0] !== "undefined") {
-                id = res.data[0].id;
-                name = res.data[0].name;
-                thumbnail = res.data[0].thumbnail;
-                description = res.data[0].description;
-                urls = res.data[0].urls;
-            } else {
-                sendTextMessage(recipientId, 'Não conseguimos encontrar o seu personagem :(');
-            }
-        })
-        .then(function(res) {
-
-            urlDetail = urls.map(function(item) {
-                if (item.type == 'detail') {
-                    return item.url;
-                }
-            });
-
-            urlDetail = urlDetail[0].split('?');
-
-            var messageData = {
-                recipient: {
-                    id: recipientId
-                },
-                message: {
-                    attachment: {
-                        type: "template",
-                        payload: {
-                            template_type: "generic",
-                            elements: [{
-                                title: name,
-                                subtitle: description,
-                                image_url: thumbnail.path + "/portrait_medium." + thumbnail.extension,
-                                buttons: [{
-                                    type: "web_url",
-                                    url: urlDetail[0],
-                                    title: "Ver mais"
+            if (res !== null) {
+                var dataAsync = JSON.parse(res);
+                messageData = {
+                    recipient: {
+                        id: recipientId
+                    },
+                    message: {
+                        attachment: {
+                            type: "template",
+                            payload: {
+                                template_type: "generic",
+                                elements: [{
+                                    title: dataAsync.name,
+                                    subtitle: dataAsync.description,
+                                    image_url: dataAsync.thumbnail.path + "/portrait_medium." + dataAsync.thumbnail.extension,
+                                    buttons: [{
+                                        type: "web_url",
+                                        url: dataAsync.urlDetail[0],
+                                        title: "Ver mais"
+                                    }]
                                 }]
-                            }]
+                            }
                         }
                     }
-                }
-            };
+                };
 
-            callSendAPI(messageData, 'messages');
-        })
-        .fail(console.error)
-        .done(function(data) {
+                callSendAPI(messageData, 'messages');
+            } else {
+                marvel.characters.findByName(event.message.text)
+                    .then(function (res) {
+                        if (typeof res.data[0] !== "undefined") {
+                            data = {
+                                id: res.data[0].id,
+                                name: res.data[0].name,
+                                thumbnail: res.data[0].thumbnail,
+                                description: res.data[0].description,
+                                urls: res.data[0].urls
+                            };
+                        } else {
+                            sendTextMessage(recipientId, 'Não conseguimos encontrar o seu personagem :(');
+                        }
+                    })
+                    .then(function (res) {
+
+                        data.urlDetail = data.urls.map(function (item) {
+                            if (item.type == 'detail') {
+                                return item.url;
+                            }
+                        });
+
+                        data.urlDetail = data.urlDetail[0].split('?');
+
+                        cache.set(event.message.text, JSON.stringify(data), function (err, reply) {
+                            console.log(err);
+                        });
+
+                        messageData = {
+                            recipient: {
+                                id: recipientId
+                            },
+                            message: {
+                                attachment: {
+                                    type: "template",
+                                    payload: {
+                                        template_type: "generic",
+                                        elements: [{
+                                            title: data.name,
+                                            subtitle: data.description,
+                                            image_url: data.thumbnail.path + "/portrait_medium." + data.thumbnail.extension,
+                                            buttons: [{
+                                                type: "web_url",
+                                                url: data.urlDetail[0],
+                                                title: "Ver mais"
+                                            }]
+                                        }]
+                                    }
+                                }
+                            }
+                        };
+
+                        callSendAPI(messageData, 'messages');
+                    })
+                    .fail(console.error)
+                    .done(function (data) {
+                    });
+            }
         });
 }
 

@@ -3,9 +3,21 @@ version: "2"
 services:
   backend:
     build: ./backend
-    command: nodemon --inspect server.js
+    command: nodemon --debug server.js
     volumes:
       - ./backend:/app
     ports:
       - "5001:80"
       - "5858:5858"
+    networks:
+      - back-tier
+
+  redis:
+    image: redis:alpine
+    container_name: cache
+    ports: ["6379"]
+    networks:
+      - back-tier
+
+networks:
+  back-tier:
