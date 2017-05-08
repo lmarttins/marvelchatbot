@@ -1,4 +1,7 @@
-TODO:
+Requirements:
+- install docker and docker-compose
+- download ngrok (Tunnel locahost to test chatbot)
 
-Scalability
-- Cache character information
+Commands:
+1 - ./ngrok http 5001
+2 - sudo docker-compose build && sudo docker-compose up
