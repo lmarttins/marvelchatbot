@@ -52,7 +52,20 @@ app.post('/webhook/', function (req, res) {
             pageEntry.messaging.forEach(function(event) {
                 if (event.postback) {
                     if (event.postback.payload == 'GET_STARTED_PAYLOAD') {
-                        sendTextMessage(event.sender.id, 'Digite um nome de personagem Marvel :D');
+                      request({
+                          uri: 'https://graph.facebook.com/v2.6/' + event.sender.id,
+                          qs: {
+                            fields: 'first_name',
+                            access_token: MESSENGER_VALIDATE_TOKEN
+                          },
+                          method: 'GET'
+                      }, function (error, res, body) {
+                          if (!error && res.statusCode == 200) {
+                              var json = JSON.parse(body);
+                              var text = json.first_name + ', Digite o nome de um personagem Marvel :D';
+                              sendTextMessage(event.sender.id, text);
+                          }
+                      });
                     }
                 }
 
