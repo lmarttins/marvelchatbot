@@ -62,7 +62,7 @@ app.post('/webhook/', function (req, res) {
                       }, function (error, res, body) {
                           if (!error && res.statusCode == 200) {
                               var json = JSON.parse(body);
-                              var text = json.first_name + ', Digite o nome de um personagem Marvel :D';
+                              var text = json.first_name + ', Digite o nome de um personagem Marvel em inglês :D';
                               sendTextMessage(event.sender.id, text);
                           }
                       });
